@@ -1,17 +1,29 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:bullseye
     container_name: ads-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   server:
+    build:
+      context: .
     image: ads:lab
     container_name: ads-server
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DATA_DIR: /app/data
+      RPC_PORT: 18861
+      CACHE_TTL: 300
     volumes:
       - ./server:/app
       - ./data:/app/data
@@ -23,5 +35,8 @@ services:
     container_name: ads-client
     depends_on:
       - server
+    environment:
+      SERVER_HOST: server
+      SERVER_PORT: 18861
     volumes:
       - ./client:/app
