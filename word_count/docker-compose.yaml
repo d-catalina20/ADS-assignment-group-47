@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:bullseye
+    container_name: ads-redis
+    ports:
+      - "6379:6379"
+
+  server:
+    image: ads:lab
+    container_name: ads-server
+    depends_on:
+      - redis
+    volumes:
+      - ./server:/app
+      - ./data:/app/data
+    ports:
+      - "18861:18861"
+
+  client:
+    image: ads:lab
+    container_name: ads-client
+    depends_on:
+      - server
+    volumes:
+      - ./client:/app
