@@ -1,13 +1,14 @@
 import os
 import sys
+from typing import Final
 
 import rpyc
 
-SERVER_HOST = os.getenv("SERVER_HOST", "server")
-SERVER_PORT = int(os.getenv("SERVER_PORT", "18861"))
+SERVER_HOST: Final[str] = os.getenv("SERVER_HOST", "server")
+SERVER_PORT: Final[int] = int(os.getenv("SERVER_PORT", "18861"))
 
 
-def main():
+def main() -> None:
     if len(sys.argv) == 3:
         keyword = sys.argv[1].strip()
         filename = sys.argv[2].strip()
