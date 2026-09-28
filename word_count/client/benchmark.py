@@ -193,8 +193,8 @@ def make_plots(results, output_dir):
 
 def parse_rates(value):
     rates = [int(x.strip()) for x in value.split(",") if x.strip()]
-    if len(rates) != 5:
-        raise argparse.ArgumentTypeError("Provide exactly five request rates, e.g. 50,70,90,110,130")
+    if len(rates) > 5:
+        raise argparse.ArgumentTypeError("Provide at most five request rates, e.g. 50,70,90,110,130")
     if any(rate < 10 for rate in rates):
         raise argparse.ArgumentTypeError("Every request rate must be at least 10 requests/second")
     if any(b - a < 10 for a, b in zip(rates, rates[1:])):
