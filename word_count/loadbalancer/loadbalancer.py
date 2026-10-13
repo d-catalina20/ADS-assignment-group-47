@@ -12,7 +12,7 @@ from dataclasses import dataclass
 LOGGER = logging.getLogger("word_count.loadbalancer")
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, eq=False)
 class BackendServer:
     """A backend and the small amount of state used by the selection algorithm."""
 
@@ -205,7 +205,7 @@ class LoadBalancer:
         listener.listen(256)
         listener.settimeout(1.0)
         self._listener = listener
-        LOGGER.info("listening on %s:%s using %s", self.host, self.port)
+        LOGGER.info("listening on %s:%s", self.host, self.port)
         try:
             while not self._stop_event.is_set():
                 try:
