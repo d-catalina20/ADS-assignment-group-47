@@ -5,6 +5,7 @@ import os
 import statistics
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -59,7 +60,12 @@ def rpc_request(keyword, filename):
     result = conn.root.count_word(keyword, filename)
     end_ns = time.perf_counter_ns()
     latency_ms = (end_ns - start_ns) / 1_000_000.0
-    return latency_ms, result
+    # RPyC returns a remote dictionary reference. Copy it while this worker's
+    # connection is alive, before passing the result to the collecting thread.
+    return latency_ms, {
+        key: result[key]
+        for key in ("keyword", "filename", "count", "cache_hit", "server")
+    }
 
 
 def run_rate(rate, duration, keyword, filename, workers):
@@ -76,6 +82,7 @@ def run_rate(rate, duration, keyword, filename, workers):
     latencies = []
     cache_hits = 0
     errors = []
+    servers = Counter()
     start = time.perf_counter()
     futures = []
 
@@ -93,9 +100,12 @@ def run_rate(rate, duration, keyword, filename, workers):
         for future in as_completed(futures):
             try:
                 latency_ms, result = future.result()
+                cache_hit = result.get("cache_hit")
+                server = result.get("server", "unknown")
                 latencies.append(latency_ms)
-                if result.get("cache_hit"):
+                if cache_hit:
                     cache_hits += 1
+                servers[server] += 1
             except Exception as exc:
                 errors.append(str(exc))
 
@@ -116,6 +126,7 @@ def run_rate(rate, duration, keyword, filename, workers):
         "cache_hit_rate": (cache_hits / len(latencies) * 100.0) if latencies else 0.0,
         "latencies_ms": latencies,
         "errors_detail": errors[:10],
+        "servers": dict(servers),
     }
 
 
@@ -142,6 +153,7 @@ def save_csv(results, path):
         "max_latency_ms",
         "cache_hits",
         "cache_hit_rate_percent",
+        "backend_distribution",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -159,6 +171,9 @@ def save_csv(results, path):
                 "max_latency_ms": f"{row['max_ms']:.6f}",
                 "cache_hits": row["cache_hits"],
                 "cache_hit_rate_percent": f"{row['cache_hit_rate']:.2f}",
+                "backend_distribution": ";".join(
+                    f"{name}={count}" for name, count in sorted(row["servers"].items())
+                ),
             })
 
 
@@ -259,6 +274,7 @@ def main():
             f"min={result['min_ms']:.3f} ms, max={result['max_ms']:.3f} ms"
         )
         print(f"  cache_hit_rate={result['cache_hit_rate']:.2f}%")
+        print(f"  backends={result['servers']}")
         if result["errors_detail"]:
             print("  sample errors:")
             for error in result["errors_detail"]:
