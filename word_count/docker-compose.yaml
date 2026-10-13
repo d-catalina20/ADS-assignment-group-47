@@ -92,6 +92,11 @@ services:
     environment:
       SERVER_HOSTS: ${SERVER_HOSTS:-server_1:18861,server_2:18861,server_3:18861}
       LOADBALANCER_PORT: 18860
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 18860), 2); s.close()"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     ports:
       - "18860:18860"
 
@@ -103,7 +108,8 @@ services:
     stdin_open: true
     tty: true
     depends_on:
-      - loadbalancer
+      loadbalancer:
+        condition: service_healthy
     environment:
       SERVER_HOST: ${CLIENT_HOST:-loadbalancer}
       SERVER_PORT: ${CLIENT_PORT:-18860}
