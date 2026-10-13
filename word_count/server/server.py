@@ -15,6 +15,7 @@ REDIS_PORT: Final[int] = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB: Final[int] = int(os.getenv("REDIS_DB", "0"))
 CACHE_TTL: Final[int] = int(os.getenv("CACHE_TTL", "300"))
 RPC_PORT: Final[int] = int(os.getenv("RPC_PORT", "18861"))
+SERVER_NAME: Final[str] = os.getenv("SERVER_NAME", os.getenv("HOSTNAME", "server"))
 
 
 # compiled as mildly faster.
@@ -26,6 +27,7 @@ class ReturnedWordCount(TypedDict):
     filename: str
     count: int
     cache_hit: bool
+    server: str
 
 
 class KeywordService:
@@ -154,6 +156,9 @@ class WordCountService(rpyc.Service):
     def exposed_ping(self) -> Literal["pong"]:
         return "pong"
 
+    def exposed_server_name(self) -> str:
+        return SERVER_NAME
+
     def exposed_count_word(self, keyword: str, filename: str) -> ReturnedWordCount:
         keyword = self._normalize_keyword(keyword)
         normalized_file_path, normalized_file_name = self._normalize_file_path(filename)
@@ -164,6 +169,7 @@ class WordCountService(rpyc.Service):
                 filename=normalized_file_name,
                 count=cached,
                 cache_hit=True,
+                server=SERVER_NAME,
             )
 
         count = self._keyword_service.count(normalized_file_path, keyword)
@@ -173,8 +179,9 @@ class WordCountService(rpyc.Service):
         return ReturnedWordCount(
             keyword=keyword,
             filename=normalized_file_name,
-            count=False,
-            cache_hit=True,
+            count=count,
+            cache_hit=False,
+            server=SERVER_NAME,
         )
 
 

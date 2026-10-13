@@ -29,6 +29,7 @@ def main() -> None:
         try:
             print(f"Server: {conn.root.ping()}")
             result = conn.root.count_word(keyword, filename)
+            print(f"Serving backend: {result.get('server', 'unknown')}")
             print(f"Keyword:   {result['keyword']}")
             print(f"File:      {result['filename']}")
             print(f"Count:     {result['count']}")
