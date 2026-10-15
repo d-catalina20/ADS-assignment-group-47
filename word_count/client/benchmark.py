@@ -55,17 +55,21 @@ class RPyCWorker:
 
 def rpc_request(keyword, filename):
     """Make one request and measure only the RPC request/response interval."""
-    conn = RPyCWorker.connection()
     start_ns = time.perf_counter_ns()
-    result = conn.root.count_word(keyword, filename)
+    conn = rpyc.connect(SERVER_HOST, SERVER_PORT)
+    # RPyC returns a remote dictionary reference. Copy it while this worker's
+	# connection is alive, before passing the result to the collecting thread.
+    try:
+        result = conn.root.count_word(keyword, filename)
+        copy_info = {
+			key: result[key]
+			for key in ("keyword", "filename", "count", "cache_hit", "server")
+		}
+    finally:
+        conn.close()
     end_ns = time.perf_counter_ns()
     latency_ms = (end_ns - start_ns) / 1_000_000.0
-    # RPyC returns a remote dictionary reference. Copy it while this worker's
-    # connection is alive, before passing the result to the collecting thread.
-    return latency_ms, {
-        key: result[key]
-        for key in ("keyword", "filename", "count", "cache_hit", "server")
-    }
+    return latency_ms, copy_info
 
 
 def run_rate(rate, duration, keyword, filename, workers):

@@ -72,6 +72,7 @@ class LoadBalancer:
         "backends",
         "host",
         "port",
+        "algorithm",
         "connect_timeout",
         "_state_lock",
         "_stop_event",
@@ -85,6 +86,7 @@ class LoadBalancer:
         host: str,
         port: int,
         max_workers: int,
+        algorithm: str = "least_connections",
         connect_timeout: float = 5.0,
     ) -> None:
         if len(backends) == 0:
@@ -92,6 +94,7 @@ class LoadBalancer:
         self.backends: set[BackendServer] = backends
         self.host: str = host
         self.port: int = port
+        self.algorithm: str = algorithm.lower()
         self.connect_timeout: float = connect_timeout
         self._state_lock: threading.Lock = threading.Lock()
         self._stop_event: threading.Event = threading.Event()
@@ -107,14 +110,26 @@ class LoadBalancer:
             if not candidates:
                 raise RuntimeError("no backend servers available")
 
-            # select the backend with the least active connections, breaking ties with average response time..
-            backend = min(
-                candidates,
-                key=lambda item: (
-                    item.active_connections,
-                    item.average_response_time if item.completed_connections else 0.0,
-                ),
-            )
+            if self.algorithm == "least_response_time":
+                # prioritize unprobed backends first (completed_connections = 0),
+				# then select the lowest average_response_time (breaking tie by active_connections)
+                backend = min(
+                    candidates,
+                    key=lambda item: (
+                        0 if item.completed_connections == 0 else 1,
+                        item.average_response_time,
+                        item.active_connections
+					),
+				)
+            else:
+				# select the backend with the least active connections, breaking ties with average response time..
+                backend = min(
+					candidates,
+					key=lambda item: (
+						item.active_connections,
+						item.average_response_time if item.completed_connections else 0.0,
+					),
+				)
 
             backend.active_connections += 1
             return backend
@@ -235,11 +250,14 @@ class LoadBalancer:
 def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     backend_value = os.getenv("SERVER_HOSTS", "server:18861")
+    algorithm = os.getenv("LB_ALGORITHM", "least_connections")
+    LOGGER.info("Starting load balancer with algorithm=%s", algorithm)
     balancer = LoadBalancer(
         backends=_parse_backend_addresses(backend_value),
         host=os.getenv("LOADBALANCER_HOST", "0.0.0.0"),
         port=int(os.getenv("LOADBALANCER_PORT", os.getenv("SERVER_PORT", "18860"))),
         max_workers=int(os.getenv("LOADBALANCER_WORKERS", "128")),
+        algorithm=algorithm,
     )
     try:
         balancer.serve_forever()

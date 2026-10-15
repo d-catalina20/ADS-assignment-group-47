@@ -92,6 +92,8 @@ services:
     environment:
       SERVER_HOSTS: ${SERVER_HOSTS:-server_1:18861,server_2:18861,server_3:18861}
       LOADBALANCER_PORT: 18860
+      LB_ALGORITHM: ${LB_ALGORITHM:-least_connections}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 18860), 2); s.close()"]
       interval: 2s

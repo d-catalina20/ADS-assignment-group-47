@@ -1,0 +1,6 @@
+target_rate_rps,requests,successful,errors,actual_rate_rps,average_latency_ms,p99_latency_ms,min_latency_ms,max_latency_ms,cache_hits,cache_hit_rate_percent,backend_distribution
+50,500,500,0,50.043,7.232552,12.765466,3.434179,24.830634,500,100.00,server-1=3;server-3=497
+70,700,700,0,70.028,6.565585,10.832667,3.277907,17.747785,700,100.00,server-1=507;server-3=193
+90,900,900,0,90.003,6.187989,11.224485,3.219722,19.474045,900,100.00,server-1=894;server-3=6
+110,1100,1100,0,109.990,5.693103,9.202982,3.181142,28.343623,1100,100.00,server-1=1093;server-2=1;server-3=6
+130,1300,1300,0,129.992,4.907312,10.056885,3.312402,17.611933,1300,100.00,server-1=1284;server-2=3;server-3=13
