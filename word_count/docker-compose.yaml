@@ -82,13 +82,13 @@ services:
       context: .
       target: loadbalancer
     image: ads:loadbalancer
-    depends_on:
-      server_1:
-        condition: service_healthy
-      server_2:
-        condition: service_healthy
-      server_3:
-        condition: service_healthy
+    # depends_on:
+    #   server_1:
+    #     condition: service_healthy
+    #   server_2:
+    #     condition: service_healthy
+    #   server_3:
+    #     condition: service_healthy
     environment:
       SERVER_HOSTS: ${SERVER_HOSTS:-server_1:18861,server_2:18861,server_3:18861}
       LOADBALANCER_PORT: 18860

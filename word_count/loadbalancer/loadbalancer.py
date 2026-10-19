@@ -7,7 +7,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-import rpyc
 
 
 LOGGER = logging.getLogger("word_count.loadbalancer")
@@ -15,7 +14,7 @@ LOGGER = logging.getLogger("word_count.loadbalancer")
 
 @dataclass(slots=True, eq=False)
 class BackendServer:
-    """A backend and the small amount of state used by the selection algorithm."""
+    """A backend and the state used by the load-balancing and health-check algorithms."""
 
     host: str
     port: int
@@ -45,7 +44,7 @@ class BackendServer:
         self.total_response_time += max(0.0, elapsed)
         self.completed_connections += 1
 
-    
+
 def _parse_backend_addresses(value: str) -> set[BackendServer]:
     """Parse ``host:port,host:port`` from the environment."""
 
@@ -110,6 +109,7 @@ class LoadBalancer:
         self.health_check_interval = health_check_interval
         self.health_check_timeout = health_check_timeout
         self._health_thread = None
+
     def select_backend(self, excluded: set[int] | None = None) -> BackendServer:
         """Reserve and return the best backend for one incoming connection."""
 
@@ -164,36 +164,17 @@ class LoadBalancer:
                 destination.shutdown(socket.SHUT_WR)
             except OSError:
                 pass
-            
+
 
     def _check_backend_health(self, backend: BackendServer) -> bool:
-        """Check whether the backend responds to an RPyC ping."""
-
-        conn = None
+        """Active health check via TCP socket connection."""
         try:
-            conn = rpyc.connect(
-                backend.host,
-                backend.port,
-                config={
-                    "sync_request_timeout": self.health_check_timeout,
-                },
-            )
-            return conn.root.ping() == "pong"
-
-        except Exception as exc:
-            LOGGER.debug(
-                "Health check failed for %s: %s",
-                backend.address,
-                exc,
-            )
+            with socket.create_connection(
+                (backend.host, backend.port), timeout=self.health_check_timeout
+            ):
+                return True
+        except (ConnectionError, OSError):
             return False
-
-        finally:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
 
     def _health_check_loop(self) -> None:
         """Periodically check every backend's health."""
@@ -233,8 +214,7 @@ class LoadBalancer:
                 try:
                     backend = self.select_backend(attempted)
                 except RuntimeError:
-                    backend = None
-                    break
+                    raise Exception
 
                 attempted.add(id(backend))
                 try:
@@ -252,6 +232,7 @@ class LoadBalancer:
 
             if backend is None or backend_socket is None:
                 return
+
             backend_socket.settimeout(None)
             LOGGER.debug("%s -> %s", peer, backend.address)
             client_to_backend = threading.Thread(
@@ -282,10 +263,6 @@ class LoadBalancer:
             if backend is not None and backend_socket is not None:
                 self._release_backend(backend, time.perf_counter() - started)
 
-    
-    
-
-    
     def serve_forever(self) -> None:
         """Listen and submit each client tunnel to the worker pool."""
 
@@ -303,7 +280,7 @@ class LoadBalancer:
             daemon=True,
         )
         self._health_thread.start()
-        
+
         LOGGER.info("listening on %s:%s", self.host, self.port)
         try:
             while not self._stop_event.is_set():
@@ -347,6 +324,8 @@ def main() -> None:
         port=int(os.getenv("LOADBALANCER_PORT", os.getenv("SERVER_PORT", "18860"))),
         max_workers=int(os.getenv("LOADBALANCER_WORKERS", "128")),
         algorithm=algorithm,
+        health_check_interval=float(os.getenv("HEALTH_CHECK_INTERVAL", "3.0")),
+        health_check_timeout=float(os.getenv("HEALTH_CHECK_TIMEOUT", "1.5")),
     )
     try:
         balancer.serve_forever()
